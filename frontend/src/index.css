@@ -1,0 +1,8 @@
+/* frontend/src/index.css */
+/* Delete everything and paste this: */
+
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+/* That's it! No custom styles for now */

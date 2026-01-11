@@ -1,0 +1,950 @@
+# backend/docs/api.yaml - Complete API Documentation
+openapi: 3.0.0
+info:
+  title: Airport Passenger Rights API
+  description: |
+    # Airport Passenger Rights Platform API
+    
+    This API powers the Airport Passenger Rights platform, providing:
+    - Baggage allowance calculations
+    - Passenger rights information
+    - Complaint letter generation
+    - Airline rules management
+    
+    ## Base URL
+    - Production: `https://api.passengerrights.com/v1`
+    - Staging: `https://staging-api.passengerrights.com/v1`
+    - Development: `http://localhost:3001/api`
+    
+    ## Authentication
+    - Public endpoints: No authentication required
+    - Admin endpoints: JWT Bearer token required
+    
+    ## Rate Limits
+    - Public: 100 requests per 15 minutes per IP
+    - Authenticated: 1000 requests per 15 minutes per user
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: api@passengerrights.com
+    url: https://passengerrights.com/contact
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.passengerrights.com/v1
+    description: Production server
+  - url: https://staging-api.passengerrights.com/v1
+    description: Staging server
+  - url: http://localhost:3001/api
+    description: Development server
+
+tags:
+  - name: Baggage
+    description: Baggage allowance and fee calculations
+  - name: Rights
+    description: Passenger rights and compensation
+  - name: Complaints
+    description: Complaint letter generation
+  - name: Airlines
+    description: Airline information and rules
+  - name: Admin
+    description: Administrative endpoints (requires authentication)
+
+paths:
+  # Baggage Endpoints
+  /baggage/calculate:
+    post:
+      tags: [Baggage]
+      summary: Calculate baggage allowance and excess fees
+      description: |
+        Calculate baggage allowance based on airline, route, cabin class, and actual baggage.
+        Returns allowance details, excess calculations, fees, and status indicators.
+      operationId: calculateBaggage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaggageCalculationRequest'
+            examples:
+              domesticEconomy:
+                summary: Domestic Economy Flight
+                value:
+                  airlineCode: "AI"
+                  routeType: "DOMESTIC"
+                  cabinClass: "ECONOMY"
+                  passengerType: "ADULT"
+                  cabinBags: [{ weight: 8 }]
+                  checkedBags: [{ weight: 20 }, { weight: 15 }]
+              internationalBusiness:
+                summary: International Business Class
+                value:
+                  airlineCode: "6E"
+                  routeType: "INTERNATIONAL"
+                  cabinClass: "BUSINESS"
+                  passengerType: "ADULT"
+                  cabinBags: [{ weight: 12 }]
+                  checkedBags: [{ weight: 32 }]
+      responses:
+        '200':
+          description: Successful calculation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaggageCalculationResponse'
+        '400':
+          description: Invalid input parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Rules not found for given criteria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many requests
+        '500':
+          description: Internal server error
+
+  /baggage/rules/{airlineCode}:
+    get:
+      tags: [Baggage]
+      summary: Get baggage rules for an airline
+      description: Retrieve all baggage rules for a specific airline, optionally filtered by route type and cabin class.
+      operationId: getAirlineBaggageRules
+      parameters:
+        - name: airlineCode
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "AI"
+          description: IATA airline code (2 characters)
+        - name: routeType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DOMESTIC, INTERNATIONAL]
+          description: Filter by route type
+        - name: cabinClass
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ECONOMY, PREMIUM_ECONOMY, BUSINESS, FIRST]
+          description: Filter by cabin class
+        - name: passengerType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ADULT, CHILD, INFANT]
+            default: ADULT
+          description: Passenger type
+      responses:
+        '200':
+          description: List of baggage rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BaggageRule'
+        '404':
+          description: Airline or rules not found
+        '500':
+          description: Internal server error
+
+  # Rights Endpoints
+  /rights/calculate:
+    post:
+      tags: [Rights]
+      summary: Calculate passenger rights and compensation
+      description: Determine passenger rights based on flight issue type, delay duration, and applicable regulations.
+      operationId: calculatePassengerRights
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RightsCalculationRequest'
+      responses:
+        '200':
+          description: Rights and compensation information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RightsCalculationResponse'
+        '400':
+          description: Invalid input
+        '500':
+          description: Internal server error
+
+  # Complaint Endpoints
+  /complaints/generate-pdf:
+    post:
+      tags: [Complaints]
+      summary: Generate complaint letter PDF
+      description: Generate a professional complaint letter in PDF format with flight details and issue description.
+      operationId: generateComplaintPDF
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComplaintRequest'
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: Filename for download
+        '400':
+          description: Invalid complaint data
+        '500':
+          description: PDF generation failed
+
+  /complaints/email-template:
+    post:
+      tags: [Complaints]
+      summary: Generate complaint email template
+      description: Generate a formatted email template for sending complaints to airlines.
+      operationId: generateComplaintEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComplaintRequest'
+      responses:
+        '200':
+          description: Email template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplate'
+        '400':
+          description: Invalid complaint data
+
+  # Airline Endpoints
+  /airlines:
+    get:
+      tags: [Airlines]
+      summary: Get list of airlines
+      description: Retrieve all airlines supported by the platform.
+      operationId: getAirlines
+      responses:
+        '200':
+          description: List of airlines
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Airline'
+        '500':
+          description: Internal server error
+
+  /airlines/{airlineCode}:
+    get:
+      tags: [Airlines]
+      summary: Get airline details
+      description: Get detailed information about a specific airline.
+      operationId: getAirline
+      parameters:
+        - name: airlineCode
+          in: path
+          required: true
+          schema:
+            type: string
+          description: IATA airline code
+      responses:
+        '200':
+          description: Airline details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Airline'
+        '404':
+          description: Airline not found
+        '500':
+          description: Internal server error
+
+  # Admin Endpoints
+  /admin/rules:
+    post:
+      tags: [Admin]
+      summary: Create new baggage rule
+      description: Create a new baggage rule (admin authentication required).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaggageRuleInput'
+      responses:
+        '201':
+          description: Rule created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaggageRule'
+        '400':
+          description: Invalid rule data
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /admin/rules/{id}:
+    put:
+      tags: [Admin]
+      summary: Update baggage rule
+      description: Update an existing baggage rule (admin authentication required).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaggageRuleInput'
+      responses:
+        '200':
+          description: Rule updated successfully
+        '400':
+          description: Invalid rule data
+        '401':
+          description: Unauthorized
+        '404':
+          description: Rule not found
+
+    delete:
+      tags: [Admin]
+      summary: Delete baggage rule
+      description: Delete a baggage rule (admin authentication required).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Rule deleted successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Rule not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # Request Schemas
+    BaggageCalculationRequest:
+      type: object
+      required:
+        - airlineCode
+        - routeType
+        - cabinClass
+      properties:
+        airlineCode:
+          type: string
+          description: IATA airline code (2 characters)
+          example: "AI"
+          minLength: 2
+          maxLength: 2
+        routeType:
+          type: string
+          enum: [DOMESTIC, INTERNATIONAL]
+          description: Type of flight route
+          example: "DOMESTIC"
+        cabinClass:
+          type: string
+          enum: [ECONOMY, PREMIUM_ECONOMY, BUSINESS, FIRST]
+          description: Cabin class
+          example: "ECONOMY"
+        passengerType:
+          type: string
+          enum: [ADULT, CHILD, INFANT]
+          default: ADULT
+          description: Type of passenger
+        cabinBags:
+          type: array
+          description: List of cabin bags with weights
+          items:
+            type: object
+            properties:
+              weight:
+                type: number
+                minimum: 0
+                description: Weight in kilograms
+                example: 7.5
+          default: []
+        checkedBags:
+          type: array
+          description: List of checked bags with weights
+          items:
+            type: object
+            properties:
+              weight:
+                type: number
+                minimum: 0
+                description: Weight in kilograms
+                example: 20
+          default: []
+
+    RightsCalculationRequest:
+      type: object
+      required:
+        - country
+        - airlineCode
+        - issueType
+      properties:
+        country:
+          type: string
+          description: Country code (ISO 3166-1 alpha-2)
+          example: "IN"
+          minLength: 2
+          maxLength: 2
+        airlineCode:
+          type: string
+          description: IATA airline code
+          example: "6E"
+        issueType:
+          type: string
+          enum: [DELAY, CANCELLATION, DENIED_BOARDING, BAGGAGE_LOSS, BAGGAGE_DELAY]
+          description: Type of flight issue
+          example: "DELAY"
+        delayHours:
+          type: number
+          minimum: 0
+          description: Hours of delay (required for DELAY issue type)
+          example: 3
+        flightType:
+          type: string
+          enum: [DOMESTIC, INTERNATIONAL]
+          default: DOMESTIC
+          description: Type of flight
+        ticketPrice:
+          type: number
+          minimum: 0
+          description: Ticket price in local currency (for compensation calculations)
+          example: 15000
+
+    ComplaintRequest:
+      type: object
+      required:
+        - passengerName
+        - passengerEmail
+        - flightNumber
+        - airline
+        - issueType
+        - issueDescription
+      properties:
+        passengerName:
+          type: string
+          description: Full name of passenger
+          example: "John Doe"
+        passengerEmail:
+          type: string
+          format: email
+          description: Email address of passenger
+          example: "john.doe@example.com"
+        passengerAddress:
+          type: string
+          description: Mailing address (optional)
+        flightNumber:
+          type: string
+          description: Flight number
+          example: "AI101"
+        airline:
+          type: string
+          description: Airline name
+          example: "Air India"
+        pnr:
+          type: string
+          description: Passenger Name Record (booking reference)
+          example: "ABC123"
+        flightDate:
+          type: string
+          format: date
+          description: Date of flight
+          example: "2024-01-15"
+        departureAirport:
+          type: string
+          description: IATA airport code of departure
+          example: "DEL"
+        arrivalAirport:
+          type: string
+          description: IATA airport code of arrival
+          example: "BOM"
+        issueType:
+          type: string
+          enum: [DELAY, CANCELLATION, DENIED_BOARDING, BAGGAGE_LOSS, BAGGAGE_DELAY, OVERBOOKING, STAFF_BEHAVIOR, OTHER]
+          description: Type of issue
+          example: "DELAY"
+        issueDescription:
+          type: string
+          description: Detailed description of the issue
+          example: "Flight was delayed by 4 hours without proper explanation or compensation."
+        compensationAmount:
+          type: number
+          minimum: 0
+          description: Amount of compensation being requested
+          example: 10000
+        supportingDocs:
+          type: array
+          description: List of supporting documents
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                description: Type of document
+                example: "Boarding Pass"
+              description:
+                type: string
+                description: Description of document
+                example: "Original boarding pass showing flight details"
+
+    # Response Schemas
+    BaggageCalculationResponse:
+      type: object
+      properties:
+        airline:
+          type: string
+          example: "AI"
+        routeType:
+          type: string
+          example: "DOMESTIC"
+        cabinClass:
+          type: string
+          example: "ECONOMY"
+        allowances:
+          type: object
+          properties:
+            cabin:
+              $ref: '#/components/schemas/BaggageAllowance'
+            checked:
+              $ref: '#/components/schemas/BaggageAllowance'
+        yourBags:
+          type: object
+          properties:
+            cabin:
+              $ref: '#/components/schemas/BaggageSummary'
+            checked:
+              $ref: '#/components/schemas/BaggageSummary'
+        calculations:
+          type: object
+          properties:
+            cabinExcess:
+              type: number
+              description: Excess cabin baggage weight in kg
+              example: 2.5
+            checkedExcess:
+              type: number
+              description: Excess checked baggage weight in kg
+              example: 5
+            totalExcess:
+              type: number
+              description: Total excess weight in kg
+              example: 7.5
+            excessFee:
+              type: number
+              description: Calculated excess fee
+              example: 3750
+            currency:
+              type: string
+              example: "INR"
+        status:
+          type: object
+          properties:
+            cabin:
+              type: string
+              enum: [ALLOWED, EXTRA_FEE, NOT_ALLOWED]
+              example: "EXTRA_FEE"
+            checked:
+              type: string
+              enum: [ALLOWED, EXTRA_FEE, NOT_ALLOWED]
+              example: "ALLOWED"
+            overall:
+              type: string
+              enum: [ALLOWED, EXTRA_FEE, NOT_ALLOWED]
+              example: "EXTRA_FEE"
+        notes:
+          type: string
+          example: "Online prepayment available for excess baggage"
+        policyUrl:
+          type: string
+          format: uri
+          example: "https://www.airindia.com/baggage"
+        disclaimer:
+          type: string
+          example: "Estimates only. Actual fees may vary at airport."
+
+    BaggageAllowance:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 1
+        weight:
+          type: number
+          example: 7
+        dimensions:
+          type: string
+          example: "55x40x20"
+
+    BaggageSummary:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 2
+        totalWeight:
+          type: number
+          example: 15.5
+        bags:
+          type: array
+          items:
+            type: object
+            properties:
+              weight:
+                type: number
+                example: 8
+
+    RightsCalculationResponse:
+      type: object
+      properties:
+        country:
+          type: string
+          example: "IN"
+        airlineCode:
+          type: string
+          example: "6E"
+        issueType:
+          type: string
+          example: "DELAY"
+        applicableRegulations:
+          type: array
+          items:
+            type: string
+          example: ["DGCA CAR Section 3", "Montreal Convention 1999"]
+        compensation:
+          type: object
+          properties:
+            eligible:
+              type: boolean
+              example: true
+            amount:
+              type: number
+              example: 10000
+            currency:
+              type: string
+              example: "INR"
+            conditions:
+              type: string
+              example: "Applies for delays over 3 hours"
+        refund:
+          type: object
+          properties:
+            eligible:
+              type: boolean
+              example: true
+            percentage:
+              type: number
+              example: 100
+            conditions:
+              type: string
+              example: "Full refund if cancellation more than 2 weeks before departure"
+        assistance:
+          type: array
+          items:
+            type: string
+          example: ["Meal vouchers", "Hotel accommodation", "Communication facilities"]
+        canRefuse:
+          type: array
+          items:
+            type: string
+          example: ["Re-routing on unsafe aircraft", "Compensation less than legal minimum"]
+        timeLimits:
+          type: object
+          properties:
+            complaintSubmission:
+              type: string
+              example: "Within 30 days of incident"
+            airlineResponse:
+              type: string
+              example: "Within 30 days of complaint"
+        legalReferences:
+          type: array
+          items:
+            type: string
+          example: ["DGCA CAR Section 3, Series M, Part IV", "Montreal Convention Article 19"]
+        disclaimer:
+          type: string
+          example: "Informational only. Consult legal professional for specific advice."
+
+    EmailTemplate:
+      type: object
+      properties:
+        subject:
+          type: string
+          example: "Formal Complaint Regarding Air India Flight AI101"
+        toEmail:
+          type: string
+          example: "customer.relations@airindia.com"
+        ccEmails:
+          type: array
+          items:
+            type: string
+          example: ["dgca@dgca.nic.in"]
+        body:
+          type: string
+          example: "Dear Sir/Madam,\n\nI am writing to formally complain..."
+
+    Airline:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        iata_code:
+          type: string
+          example: "AI"
+        icao_code:
+          type: string
+          example: "AIC"
+        name:
+          type: string
+          example: "Air India"
+        country:
+          type: string
+          example: "India"
+        website_url:
+          type: string
+          format: uri
+          example: "https://www.airindia.com"
+        baggage_policy_url:
+          type: string
+          format: uri
+          example: "https://www.airindia.com/baggage"
+        customer_care_email:
+          type: string
+          format: email
+          example: "customer.relations@airindia.com"
+        customer_care_phone:
+          type: string
+          example: "+91-124-2641407"
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    BaggageRule:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        airline_id:
+          type: integer
+          example: 1
+        airline_name:
+          type: string
+          example: "Air India"
+        iata_code:
+          type: string
+          example: "AI"
+        cabin_class:
+          type: string
+          example: "ECONOMY"
+        route_type:
+          type: string
+          example: "DOMESTIC"
+        passenger_type:
+          type: string
+          example: "ADULT"
+        cabin_baggage_count:
+          type: integer
+          example: 1
+        cabin_baggage_weight:
+          type: number
+          example: 7
+        cabin_baggage_dimensions:
+          type: string
+          example: "55x40x20"
+        checked_baggage_count:
+          type: integer
+          example: 1
+        checked_baggage_weight:
+          type: number
+          example: 15
+        checked_baggage_size:
+          type: string
+          example: "158cm"
+        excess_fee_per_kg:
+          type: number
+          example: 500
+        excess_fee_flat:
+          type: number
+          example: 1000
+        currency:
+          type: string
+          example: "INR"
+        effective_from:
+          type: string
+          format: date
+          example: "2024-01-01"
+        effective_to:
+          type: string
+          format: date
+          nullable: true
+          example: "2024-12-31"
+        is_active:
+          type: boolean
+          example: true
+        notes:
+          type: string
+          example: "Online check-in baggage allowance may differ"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    BaggageRuleInput:
+      type: object
+      required:
+        - airline_id
+        - cabin_class
+        - route_type
+        - cabin_baggage_weight
+        - checked_baggage_weight
+        - effective_from
+      properties:
+        airline_id:
+          type: integer
+          example: 1
+        cabin_class:
+          type: string
+          example: "ECONOMY"
+        route_type:
+          type: string
+          example: "DOMESTIC"
+        passenger_type:
+          type: string
+          default: "ADULT"
+          example: "ADULT"
+        cabin_baggage_count:
+          type: integer
+          default: 1
+          example: 1
+        cabin_baggage_weight:
+          type: number
+          minimum: 0
+          example: 7
+        cabin_baggage_dimensions:
+          type: string
+          example: "55x40x20"
+        checked_baggage_count:
+          type: integer
+          default: 1
+          example: 1
+        checked_baggage_weight:
+          type: number
+          minimum: 0
+          example: 15
+        checked_baggage_size:
+          type: string
+          example: "158cm"
+        excess_fee_per_kg:
+          type: number
+          minimum: 0
+          example: 500
+        excess_fee_flat:
+          type: number
+          minimum: 0
+          example: 1000
+        currency:
+          type: string
+          default: "INR"
+          example: "INR"
+        effective_from:
+          type: string
+          format: date
+          example: "2024-01-01"
+        effective_to:
+          type: string
+          format: date
+          nullable: true
+          example: "2024-12-31"
+        is_active:
+          type: boolean
+          default: true
+          example: true
+        notes:
+          type: string
+          example: "Special holiday season rules"
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Validation Error"
+        message:
+          type: string
+          example: "Invalid airline code provided"
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: "airlineCode"
+              message:
+                type: string
+                example: "Must be a valid IATA code"
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+          example: "req_123456"
